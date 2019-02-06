@@ -1,0 +1,37 @@
+Package: MutSim
+Type: Package
+Title: Generating cancer mutations in genes according to mutational processes
+Version: 0.1.0
+Author: person("Nadezda", "Volkova", email = "nvolkova@ebi.ac.uk",
+  role = c("aut", "cre"))
+Description: Generate mutations in a set of genes according to a given mutational process,
+    total number of silent mutations per gene, total numbers of silent mutations per sample
+    and total number of non-silent mutations per sample. Allows to observe the distribution 
+    of non-silent mutations in the genes of interest and estimate the probability of damaging
+    mutations occuring by chance.
+License: CC0
+Encoding: UTF-8
+LazyData: true
+Imports: org.Hs.eg.db,
+    VariantAnnotation,
+    Biostrings,
+    AnnotationDbi,
+    deconstructSigs,
+    ggplot2
+Suggests: 
+    org.Hs.eg.db,
+    VariantAnnotation,
+    AnnotationDbi,
+    Biostrings,
+    deconstructSigs,
+    ggplot2,
+    knitr,
+    rmarkdown,
+    testthat
+RoxygenNote: 6.1.1
+VignetteBuilder: knitr
+Collate: 
+    'MutSim.R'
+    'gene_features_class.R'
+    'generateMutations.R'
+    'utility_functions.R'

@@ -1,0 +1,122 @@
+---
+title: "Simulating mutations in genes"
+author: "Nadezda Volkova"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+MutSim package performs substitution simulation within the exons of the genes of interest following a given mutational process and fixed numbers of mutations per sample. Let us check if the mutations in nucleotide excision repair genes in TCGA melanoma dataset (SKCM-US projects, available from [ICGC Data Portal](http://dcc.icgc.org)).
+
+First we will need the data and reference objects:
+
+```{r}
+library(MutSim)
+library(BSgenome.Hsapiens.UCSC.hg19)
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+genome <- BSgenome.Hsapiens.UCSC.hg19
+txdb <- TxDb.Hsapiens.UCSC.hg19.knownGene
+mutations_uv <- read.delim('~/TCGA/SKCM_cavemanpindel.txt', skip = 66)
+head(mutations_uv[,c('Sample','Chrom','Pos','Ref','Alt','Filter','Type','Effect')])
+```
+
+Let's check the mutations in NER core genes (as per [Knijnenburg et al. 2018](https://www.sciencedirect.com/science/article/pii/S2211124718304376?via%3Dihub#bib54)). We will take all the mutations with VAF>0.05 and annotate them again.
+
+```{r, warning=FALSE, eval = F}
+NER.core <- c('XPC','XPA','CUL5','ERCC1','ERCC2','ERCC4','ERCC5','ERCC6','POLE','POLE3')
+NER.mutations <- mutations_uv[mutations_uv$PM.Tum > 0.05 &
+                                mutations_uv$Type == 'Sub' &
+                                mutations_uv$Gene %in% NER.core, c('Sample','Chrom','Pos','Ref','Alt','Gene')]
+NER.mutations.annot <- annotate_simulated_variants(variants = NER.mutations, txdb = txdb, genome = genome)
+table(NER.mutations.annot[,'Effect'])
+```
+
+In order to simulate the correct number of mutations, the algorithm requires also total numbers of silent and non-silent mutations per sample as well as the total number of silent mutations per gene. (This step can take a couple of minutes if you set of mutations is large...)
+
+```{r}
+# Define the sample set
+samples <- unique(as.character(mutations_uv$Sample))
+# Count the silent mutations
+silent_total_per_sample <- sapply(samples, function(x)
+  nrow(mutations_uv[mutations_uv$Sample == x & 
+                      mutations_uv$Effect == 'silent',]))
+names(silent_total_per_sample) <- samples
+
+# Select only samples with at least one silene mutation!
+samples <- samples[silent_total_per_sample>0]
+silent_total_per_sample <- silent_total_per_sample[silent_total_per_sample>0]
+
+# Count non-silent mutations
+non_silent_total_per_sample <- sapply(samples, function(x)
+  nrow(mutations_uv[mutations_uv$Sample == x & 
+                      mutations_uv$Effect %in% c('missense','nonsense',
+                                                 'ess_splice',
+                                                 'start_lost',
+                                                 'stop_lost'),]))
+names(non_silent_total_per_sample) <- samples
+# Count silent mutations per gene
+silent_mutations_per_gene <- sapply(NER.core, function(x) 
+  nrow(mutations_uv[mutations_uv$Gene == x &
+                      mutations_uv$Effect == 'silent',]))
+names(silent_mutations_per_gene) <- NER.core
+# Count non-silent mutations per gene
+non_silent_mutations_per_gene <- sapply(NER.core, function(x) 
+  nrow(mutations_uv[mutations_uv$Gene == x &
+                      mutations_uv$Effect %in% c('missense','nonsense',
+                                                 'ess_splice',
+                                                 'start_lost',
+                                                 'stop_lost'),]))
+names(non_silent_mutations_per_gene) <- NER.core
+
+
+hist(non_silent_total_per_sample/silent_total_per_sample,
+     main = 'Ratio of non-silent / silent point mutations per sample',
+     xlab = 'Ratio', breaks = 100)
+# it is around 2, which is typical for cancer samples, esp. whole exomes
+```
+
+Now let's define the mutational process. As we are looking and melanoma samples of sun-exposed skin, we will take the UV light associated COSMIC signature 7.
+
+```{r}
+upload_signatures()
+
+signature <- cancer_signatures[,7]
+
+signature
+```
+
+Mutations per gene will be simulated as X ~ Poisson(\lambda), where \eq{\lambda = silent_{i} \frac{\sum_{k in G} silent_{G}}{\sum_{j in S} silent_{j}} \left( \frac{silent_{i} + nonsilent_{i}}{silent_{i}} \right)}}. Here \eq{silent_{i}} denotes the number of silent mutations in sample *i*, \eq{silent_{G}} - number of silent mutations per gene *G* in the whole dataset, \eq{non_silent_{i}} - number of non-silent mutations in sample *i*. This number of mutations then is sampled from the gene sequence, based on adjusted mutation probability distribution \eq{P_{G} = signature / contexts_{exome} * contexts_{G}}.
+
+Now we can run the simulation and check, if the number of mutations in these genes observed in the dataset agrees with mutational burden of the samples:
+
+```{r, warning = F}
+res <- generate_mutations(geneset = NER.core,
+                          N = 100,
+                          samples = samples,
+                          silent_total_per_sample = silent_total_per_sample,
+                          silent_mutations_per_gene = silent_mutations_per_gene,
+                          non_silent_total_per_sample = non_silent_total_per_sample,
+                          genome = genome,
+                          transcripts = txdb,
+                          signature = signature)
+
+hist(res$silent, main = 'Silent mutations for NER core genes', breaks = 10)
+abline(v = sum(silent_mutations_per_gene), lty = 2, col = 'red')
+
+hist(res$nonsilent, main = 'Non-silent mutations for NER core genes', breaks = 10)
+abline(v = sum(non_silent_mutations_per_gene), lty = 2, col = 'red')
+
+```
+
+Observed values fall into the dirstibution, so it looks like all those non-silent mutations were generated by UV exposure simply by chance.
+
