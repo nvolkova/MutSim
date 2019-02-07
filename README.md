@@ -6,7 +6,7 @@ May be useful for testing if mutation rate in a particular gene is a consequence
 
 ```
 library(devtools)
-devtools::install_github(nvolkova/MutSim)
+devtools::install_github('nvolkova/MutSim')
 ```
 Usage examples are described in the vignette.
 
