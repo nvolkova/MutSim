@@ -105,12 +105,12 @@ annotate_simulated_variants <- function(variants, txdb, genome, current_source =
 #'  @param transcripts A [TxDb](http://127.0.0.1:11491/help/library/GenomicFeatures/html/TxDb.html) object which serves as the annotation for
 #'                     distinguishing synonymous and non-synonymous variants.
 #'  @param samples Names of samples to generate mutations for.
-#'  @param silent_total_per_sample Single numeric value, or a named vector of numbers reflecting expected number of silent mutations per sample.
-#'                                 Same length as \code{samples}.
+#'  @param all_silent Number of silent mutations in the dataset.
 #'  @param silent_mutations_per_gene Single numeric value, or a named vector of numbers reflecting expected number of silent mutations per gene.
 #'                                   Same length as \code{geneset}.
-#'  @param non_silent_total_per_sample Single numeric value, or a named vector of numbers reflecting expected number of non-silent mutations per
-#'                                     sample. Same length as \code{samples}.
+#'  @param total_mutations Single numeric value, or a named vector of numbers reflecting expected total number of mutations per
+#'                         sample. Same length as \code{samples}.
+#'  @param targets Genomic ranges reflecting the sequencing regions.
 #'  @details Mutations are generated per gene according to a Poisson process with the following
 #'           expected value: \eqn{$\lambda = silent_{i} \frac{\sum_{k in G} silent_{G}}{\sum_{j in S} silent_{j}} \left( \frac{silent_{i} + nonsilent_{i}}{silent_{i}} \right)}.
 #'           The mutational process is adjusted to trinucleotide frequencies in the exons of the genes
@@ -131,10 +131,11 @@ annotate_simulated_variants <- function(variants, txdb, genome, current_source =
 
 generate_mutations <- function(geneset = NULL,
                                N = 100, samples = NULL,
-                               silent_total_per_sample = NULL,
+                               all_silent = NULL,
                                silent_mutations_per_gene = NULL,
-                               non_silent_total_per_sample = NULL,
-                               signature = NULL, genome = NULL, transcripts = NULL) {
+                               total_mutations = NULL,
+                               signature = NULL, genome = NULL, transcripts = NULL,
+                               targets = NULL) {
 
   if (is.null(geneset)) {
 
@@ -190,32 +191,25 @@ generate_mutations <- function(geneset = NULL,
 
   }
 
-  if (is.null(silent_total_per_sample)) {
+  if (is.null(all_silent)) {
 
-    message('Please specify the total number of silent mutations per sample.')
+    message('Please specify the total number of silent mutations.')
 
     return(NA)
   }
 
-  if (length(silent_total_per_sample)==1) {
 
-    silent_total_per_sample <- rep(silent_total_per_sample, length(samples))
+  if (is.null(total_mutations)) {
 
-    names(silent_total_per_sample) <- samples
-
-  }
-
-  if (is.null(non_silent_total_per_sample)) {
-
-    message('Please specify the total number of silent mutations per sample.')
+    message('Please specify the total number of mutations per sample.')
 
   }
 
-  if (length(non_silent_total_per_sample)==1) {
+  if (length(total_mutations)==1) {
 
-    non_silent_total_per_sample <- rep(non_silent_total_per_sample, length(samples))
+    total_mutations <- rep(total_mutations, length(samples))
 
-    names(non_silent_total_per_sample) <- samples
+    names(total_mutations) <- samples
 
   }
 
@@ -228,7 +222,7 @@ generate_mutations <- function(geneset = NULL,
 
   upload_signatures()
 
-  gene_features <- get_all_features(geneset, transcripts, genome)
+  gene_features <- get_all_features(geneset, transcripts, genome, targets)
 
   new_probs_long <- get_all_probabilities(geneset,
                                           gene_features,
@@ -259,11 +253,7 @@ generate_mutations <- function(geneset = NULL,
 
               names(new_probs) <- new.types.full
 
-              local_total <- rpois(1, lambda = silent_total_per_sample[pat] *
-                                       silent_mutations_per_gene[y]/
-                                       sum(silent_total_per_sample) *
-                                       (silent_total_per_sample[pat] + non_silent_total_per_sample[pat])/
-                                       silent_total_per_sample[pat]) + 0.01
+              local_total <- rpois(1, lambda = silent_mutations_per_gene[y] / all_silent * total_mutations[pat])
 
               if (local_total > 0) {
 

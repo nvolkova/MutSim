@@ -20,103 +20,162 @@ MutSim package performs substitution simulation within the exons of the genes of
 
 First we will need the data and reference objects:
 
-```{r}
+```{r,eval = F}
 library(MutSim)
 library(BSgenome.Hsapiens.UCSC.hg19)
 library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+
+targets <- import('~/Downloads/gencode.v19.basic.exome.bed')
+seqlevels(targets) <- paste0('chr',seqlevels(targets))
 genome <- BSgenome.Hsapiens.UCSC.hg19
 txdb <- TxDb.Hsapiens.UCSC.hg19.knownGene
 mutations_uv <- read.delim('~/TCGA/SKCM_cavemanpindel.txt', skip = 66)
+uv <- read.table('~/TCGA/SKCM_mutation_matrix.dat', sep = '\t', header = T)
 head(mutations_uv[,c('Sample','Chrom','Pos','Ref','Alt','Filter','Type','Effect')])
+```
+
+Now let's define the mutational process. As we are looking and melanoma samples of sun-exposed skin, we will take the UV light associated COSMIC signature 7. We will select only samples with visible UV exposure:
+
+```{r,eval = F}
+upload_signatures()
+colnames(uv) <- types.full
+samples <- unique(as.character(mutations_uv$Sample))
+samples <- samples[sapply(samples, function(x) cosine(cancer_signatures[,7], as.numeric(uv[x,1:96])))>0.8]
+samples <- samples[!is.na(samples)]
+
+signature <- cancer_signatures[,7]
+signature
 ```
 
 Let's check the mutations in NER core genes (as per [Knijnenburg et al. 2018](https://www.sciencedirect.com/science/article/pii/S2211124718304376?via%3Dihub#bib54)). We will take all the mutations with VAF>0.05 and annotate them again.
 
 ```{r, warning=FALSE, eval = F}
-NER.core <- c('XPC','XPA','CUL5','ERCC1','ERCC2','ERCC4','ERCC5','ERCC6','POLE','POLE3')
+NER.core <- c('XPC','XPA','CUL5','ERCC1','ERCC2','ERCC4','ERCC5','ERCC6')
+MMR.core <- c('MLH1','MLH3','MSH2','MSH3','MSH6','PMS1','PMS2','EXO1')
 NER.mutations <- mutations_uv[mutations_uv$PM.Tum > 0.05 &
                                 mutations_uv$Type == 'Sub' &
-                                mutations_uv$Gene %in% NER.core, c('Sample','Chrom','Pos','Ref','Alt','Gene')]
-NER.mutations.annot <- annotate_simulated_variants(variants = NER.mutations, txdb = txdb, genome = genome)
+                                mutations_uv$Sample %in% samples &
+                                mutations_uv$Gene %in% NER.core, c('Sample','Chrom','Pos','Ref','Alt','Gene','Effect')]
+MMR.mutations <- mutations_uv[mutations_uv$PM.Tum > 0.05 &
+                                mutations_uv$Type == 'Sub' &
+                                mutations_uv$Sample %in% samples &
+                                mutations_uv$Gene %in% MMR.core, c('Sample','Chrom','Pos','Ref','Alt','Gene','Effect')]
+NER.mutations.annot <- annotate_simulated_variants(variants = NER.mutations[,-c(7:8)], txdb = txdb, genome = genome)
+MMR.mutations.annot <- annotate_simulated_variants(variants = MMR.mutations[,-c(7:8)], txdb = txdb, genome = genome)
 table(NER.mutations.annot[,'Effect'])
+table(as.character(NER.mutations[,'Effect']))
+table(MMR.mutations.annot[,'Effect'])
+table(as.character(MMR.mutations[,'Effect']))
 ```
 
 In order to simulate the correct number of mutations, the algorithm requires also total numbers of silent and non-silent mutations per sample as well as the total number of silent mutations per gene. (This step can take a couple of minutes if you set of mutations is large...)
 
-```{r}
-# Define the sample set
-samples <- unique(as.character(mutations_uv$Sample))
+```{r,eval = F}
 # Count the silent mutations
-silent_total_per_sample <- sapply(samples, function(x)
-  nrow(mutations_uv[mutations_uv$Sample == x & 
-                      mutations_uv$Effect == 'silent',]))
-names(silent_total_per_sample) <- samples
-
-# Select only samples with at least one silene mutation!
-samples <- samples[silent_total_per_sample>0]
-silent_total_per_sample <- silent_total_per_sample[silent_total_per_sample>0]
+all_silent <- nrow(mutations_uv[mutations_uv$Sample %in% samples &
+                                mutations_uv$PM.Tum > 0.05 & 
+                                mutations_uv$Effect == 'silent',])
 
 # Count non-silent mutations
-non_silent_total_per_sample <- sapply(samples, function(x)
+total_per_sample <- sapply(samples, function(x)
   nrow(mutations_uv[mutations_uv$Sample == x & 
-                      mutations_uv$Effect %in% c('missense','nonsense',
-                                                 'ess_splice',
-                                                 'start_lost',
-                                                 'stop_lost'),]))
-names(non_silent_total_per_sample) <- samples
+                      mutations_uv$PM.Tum > 0.05 & 
+                      mutations_uv$Effect %in% c('silent','nonsense','missense'),]))
+names(total_per_sample) <- samples
+
 # Count silent mutations per gene
-silent_mutations_per_gene <- sapply(NER.core, function(x) 
+NER_silent_mutations_per_gene <- sapply(NER.core, function(x) 
   nrow(mutations_uv[mutations_uv$Gene == x &
+                      mutations_uv$Sample %in% samples &
+                      mutations_uv$PM.Tum > 0.05 &
                       mutations_uv$Effect == 'silent',]))
-names(silent_mutations_per_gene) <- NER.core
-# Count non-silent mutations per gene
-non_silent_mutations_per_gene <- sapply(NER.core, function(x) 
+names(NER_silent_mutations_per_gene) <- NER.core
+
+MMR_silent_mutations_per_gene <- sapply(MMR.core, function(x) 
   nrow(mutations_uv[mutations_uv$Gene == x &
-                      mutations_uv$Effect %in% c('missense','nonsense',
-                                                 'ess_splice',
-                                                 'start_lost',
-                                                 'stop_lost'),]))
-names(non_silent_mutations_per_gene) <- NER.core
+                      mutations_uv$Sample %in% samples &
+                      mutations_uv$PM.Tum > 0.05 &
+                      mutations_uv$Effect == 'silent',]))
+names(MMR_silent_mutations_per_gene) <- MMR.core
 
-
-hist(non_silent_total_per_sample/silent_total_per_sample,
-     main = 'Ratio of non-silent / silent point mutations per sample',
-     xlab = 'Ratio', breaks = 100)
-# it is around 2, which is typical for cancer samples, esp. whole exomes
-```
-
-Now let's define the mutational process. As we are looking and melanoma samples of sun-exposed skin, we will take the UV light associated COSMIC signature 7.
-
-```{r}
-upload_signatures()
-
-signature <- cancer_signatures[,7]
-
-signature
 ```
 
 Mutations per gene will be simulated as X ~ Poisson(\lambda), where \eq{\lambda = silent_{i} \frac{\sum_{k in G} silent_{G}}{\sum_{j in S} silent_{j}} \left( \frac{silent_{i} + nonsilent_{i}}{silent_{i}} \right)}}. Here \eq{silent_{i}} denotes the number of silent mutations in sample *i*, \eq{silent_{G}} - number of silent mutations per gene *G* in the whole dataset, \eq{non_silent_{i}} - number of non-silent mutations in sample *i*. This number of mutations then is sampled from the gene sequence, based on adjusted mutation probability distribution \eq{P_{G} = signature / contexts_{exome} * contexts_{G}}.
 
 Now we can run the simulation and check, if the number of mutations in these genes observed in the dataset agrees with mutational burden of the samples:
 
-```{r, warning = F}
-res <- generate_mutations(geneset = NER.core,
+```{r, warning = F,eval = F}
+resNER <- generate_mutations(geneset = NER.core,
                           N = 100,
                           samples = samples,
-                          silent_total_per_sample = silent_total_per_sample,
-                          silent_mutations_per_gene = silent_mutations_per_gene,
-                          non_silent_total_per_sample = non_silent_total_per_sample,
+                          all_silent = all_silent,
+                          silent_mutations_per_gene = NER_silent_mutations_per_gene,
+                          total_mutations = total_per_sample,
                           genome = genome,
                           transcripts = txdb,
-                          signature = signature)
-
-hist(res$silent, main = 'Silent mutations for NER core genes', breaks = 10)
-abline(v = sum(silent_mutations_per_gene), lty = 2, col = 'red')
-
-hist(res$nonsilent, main = 'Non-silent mutations for NER core genes', breaks = 10)
-abline(v = sum(non_silent_mutations_per_gene), lty = 2, col = 'red')
-
+                          signature = signature,
+                          targets = targets)
 ```
 
-Observed values fall into the dirstibution, so it looks like all those non-silent mutations were generated by UV exposure simply by chance.
 
+```{r, warning = F,eval = F}
+resMMR <- generate_mutations(geneset = MMR.core,
+                          N = 100,
+                          samples = samples,
+                          all_silent = all_silent,
+                          silent_mutations_per_gene = MMR_silent_mutations_per_gene,
+                          total_mutations = total_per_sample,
+                          genome = genome,
+                          transcripts = txdb,
+                          signature = signature,
+                          targets = targets)
+```
+
+Observed values fall into the dirstibution, so it looks like all those non-silent mutations were generated by UV exposure simply by chance:
+
+NER
+```{r,eval = F}
+library(gridExtra)
+library(grid)
+library(ggplot2)
+library(lattice)
+
+df <- data.frame(silent = resNER$silent, nonsilent = resNER$nonsilent)
+g1 <- ggplot(data = df, aes(silent)) + geom_histogram(binwidth = 1, fill = 'darkgreen', col = 'black', size = 1) + 
+  geom_vline(xintercept = sum(NER.mutations.annot[,'Effect'] == 'synonymous'),
+             linetype = 'dashed', color = 'red', size = 1) +
+  ggtitle(label = 'Silent mutations in NER genes') +
+  theme_bw() + 
+  theme(panel.border = element_blank(), panel.grid = element_blank())
+g2 <- ggplot(data = df, aes(nonsilent)) + geom_histogram(binwidth = 1, fill = 'darkblue', col = 'black', size = 1) + 
+  geom_vline(xintercept = sum(NER.mutations.annot[,'Effect'] %in% c('nonsynonymous','nonsense')),
+             linetype = 'dashed', color = 'red', size = 1) +
+  ggtitle(label = 'Non-silent mutations in NER genes') +
+  theme_bw() + 
+  theme(panel.border = element_blank(), panel.grid = element_blank())
+q <- grid.arrange(g1, g2, ncol = 2)
+ggsave(filename = '~/generated_vs_real_mutations_in_NER_genes_UV.pdf', plot = q, device = 'pdf',width = 10, height = 6)
+```
+
+MMR
+```{r,eval = F}
+df <- data.frame(silent = resMMR$silent, nonsilent = resMMR$nonsilent)
+g1 <- ggplot(data = df, aes(silent)) + geom_histogram(binwidth = 1, fill = 'darkgreen', col = 'black', size = 1) + 
+  geom_vline(xintercept = sum(MMR.mutations.annot[,'Effect']=='synonymous'),
+             linetype = 'dashed', color = 'red', size = 2) +
+  ggtitle(label = 'Silent mutations in MMR genes') +
+  theme_bw() + 
+  theme(panel.border = element_blank(), panel.grid = element_blank())
+g2 <- ggplot(data = df, aes(nonsilent)) + geom_histogram(binwidth = 1, fill = 'darkblue', col = 'black', size = 1) + 
+  geom_vline(xintercept = sum(MMR.mutations.annot[,'Effect'] %in% c('nonsynonymous','nonsense')),
+             linetype = 'dashed', color = 'red', size = 2) +
+  ggtitle(label = 'Non-silent mutations in MMR genes') +
+  theme_bw() + 
+  theme(panel.border = element_blank(), panel.grid = element_blank())
+q <- grid.arrange(g1, g2, ncol = 2)
+ggsave(filename = '~/generated_vs_real_mutations_in_MMR_genes_UV.pdf', plot = q, device = 'pdf',width = 10, height = 6)
+```
+
+```{r}
+save(resNER, resMMR, file = '~/UV_simulation_NER_MMR.RData')
+```

@@ -254,13 +254,13 @@ get_all_probabilities <- function(geneset,
 #' @param txdb A TxDb object
 #' @param genome A BSgenome object
 #' @return A list of GeneFeatures objects for each gene
-get_all_features <- function(geneset, txdb, genome) {
+get_all_features <- function(geneset, txdb, genome, targets) {
 
   TxDb_geneset <- TxDbnames(geneset, txdb)
 
   names(TxDb_geneset) <- geneset
 
-  gene_exons <- exonsBy(txdb, "gene")
+  gene_exons <- cdsBy(txdb, "gene")
 
   gene_exons <- gene_exons[TxDb_geneset]
 
@@ -277,7 +277,7 @@ get_all_features <- function(geneset, txdb, genome) {
 
     gen_chrom(gene_features[[x]]) <- get_chromosomes(TxDb_geneset[x], gene_exons)
 
-    gr <- min_ranges(gene_exons[[TxDb_geneset[x]]])
+    gr <- GenomicRanges::intersect(min_ranges(gene_exons[[TxDb_geneset[x]]]),targets,ignore.strand=TRUE)
 
     seq <- getSeq(genome, gr)
 
