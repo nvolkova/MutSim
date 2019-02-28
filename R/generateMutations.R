@@ -30,7 +30,7 @@
 #'    annotate_simulated_variants(variants, txdb, genome)
 #'
 #'
-
+#' @export
 annotate_simulated_variants <- function(variants, txdb, genome, current_source = Hsapiens) {
 
   variants <- as.matrix(variants)
@@ -128,7 +128,7 @@ annotate_simulated_variants <- function(variants, txdb, genome, current_source =
 #'
 #'  generate_mutations()
 #'
-
+#' @export
 generate_mutations <- function(geneset = NULL,
                                N = 100, samples = NULL,
                                all_silent = NULL,
@@ -313,7 +313,7 @@ generate_mutations <- function(geneset = NULL,
 #'
 #' upload_signatures()
 #'
-
+#' @export
 upload_signatures <- function() {
 
   # upload cancer signatures
