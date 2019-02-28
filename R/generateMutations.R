@@ -63,7 +63,7 @@ annotate_simulated_variants <- function(variants, txdb, genome, current_source =
 
         }
 
-        a <- predictCoding(query = gr, subject = txdb,
+        a <- VariantAnnotation::predictCoding(query = gr, subject = txdb,
                            seqSource = current_source,
                            varAllele = DNAStringSet(x = variants[, "Mut"]))
 
