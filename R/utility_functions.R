@@ -152,7 +152,7 @@ RevComMutType <- function(nucl) {
 #' @return Reverse complement of it
 RevCom <- function(x) {
 
-  return(as.character(Biostrings::reverseComplement(DNAString(x))))
+  return(as.character(Biostrings::reverseComplement(Biostrings::DNAString(x))))
 
 }
 
