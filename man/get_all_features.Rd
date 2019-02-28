@@ -4,7 +4,7 @@
 \alias{get_all_features}
 \title{Get the required features for each gene}
 \usage{
-get_all_features(geneset, txdb, genome)
+get_all_features(geneset, txdb, genome, targets)
 }
 \arguments{
 \item{geneset}{A vector of gene names}

@@ -5,9 +5,9 @@
 \title{Generating base substitutions based on silent mutation rate}
 \usage{
 generate_mutations(geneset = NULL, N = 100, samples = NULL,
-  silent_total_per_sample = NULL, silent_mutations_per_gene = NULL,
-  non_silent_total_per_sample = NULL, signature = NULL,
-  genome = NULL, transcripts = NULL)
+  all_silent = NULL, silent_mutations_per_gene = NULL,
+  total_mutations = NULL, signature = NULL, genome = NULL,
+  transcripts = NULL, targets = NULL)
 }
 \description{
 This function generates mutations in a set of genes given the mutation probabilities
@@ -28,12 +28,12 @@ This function generates mutations in a set of genes given the mutation probabili
  @param transcripts A [TxDb](http://127.0.0.1:11491/help/library/GenomicFeatures/html/TxDb.html) object which serves as the annotation for
                     distinguishing synonymous and non-synonymous variants.
  @param samples Names of samples to generate mutations for.
- @param silent_total_per_sample Single numeric value, or a named vector of numbers reflecting expected number of silent mutations per sample.
-                                Same length as \code{samples}.
+ @param all_silent Number of silent mutations in the dataset.
  @param silent_mutations_per_gene Single numeric value, or a named vector of numbers reflecting expected number of silent mutations per gene.
                                   Same length as \code{geneset}.
- @param non_silent_total_per_sample Single numeric value, or a named vector of numbers reflecting expected number of non-silent mutations per
-                                    sample. Same length as \code{samples}.
+ @param total_mutations Single numeric value, or a named vector of numbers reflecting expected total number of mutations per
+                        sample. Same length as \code{samples}.
+ @param targets Genomic ranges reflecting the sequencing regions.
  @details Mutations are generated per gene according to a Poisson process with the following
           expected value: \eqn{$\lambda = silent_{i} \frac{\sum_{k in G} silent_{G}}{\sum_{j in S} silent_{j}} \left( \frac{silent_{i} + nonsilent_{i}}{silent_{i}} \right)}.
           The mutational process is adjusted to trinucleotide frequencies in the exons of the genes

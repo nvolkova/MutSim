@@ -303,3 +303,40 @@ generate_mutations <- function(geneset = NULL,
 
 }
 
+
+
+#' Upload cancer signatures and mutation types from COSMIC
+#'
+#' @description Uploades COSMIC mutation signature set from [COSMIC website]("http://cancer.sanger.ac.uk/cancergenome/assets/signatures_probabilities.txt"),
+#'              defines context and mutation types: \code{types}, \code{types.full}. Also
+#'              defines exome trinucleotide counts.
+#'
+#' upload_signatures()
+#'
+
+upload_signatures <- function() {
+
+  # upload cancer signatures
+
+  sp_url <- paste("http://cancer.sanger.ac.uk/cancergenome/assets/",
+                  "signatures_probabilities.txt", sep = "")
+
+  cancer_signatures <<- read.table(sp_url, sep = "\t", header = TRUE)
+
+  cancer_signatures <<- cancer_signatures[order(cancer_signatures[,1]),]
+
+  types <<- as.character(cancer_signatures$Trinucleotide) # trinucleotide classes
+
+  types.full <<- as.character(cancer_signatures$Somatic.Mutation.Type) # substitution types
+
+  row.names(cancer_signatures) <<- types.full
+
+  cancer_signatures <<- as.matrix(cancer_signatures[,4:33])
+
+  new.types <<- c(types, sapply(types, RevCom))
+
+  new.types.full <<- c(types.full, sapply(types.full, RevComMutType))
+
+  tri.counts.exome <<- deconstructSigs::tri.counts.exome
+
+}
